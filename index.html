@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Matriz EPP</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    
+    <style>
+        @font-face {
+            font-family: 'MiFuenteDashboard';
+            src: url('https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Spongeboy%20Me%20Bob.ttf') format('truetype');
+        }
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.5; padding: 2em; background-color: #1a202c; color: #e2e8f0;
+        }
+        .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        h1 { color: #FFD700; font-family: 'MiFuenteDashboard', sans-serif; font-size: 2.5em; margin: 0; }
+        .company-logo { height: 120px; width: auto; }
+        .summary-cards, .filter-container { margin-bottom: 24px; position: relative; z-index: 20; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+        .card, .filter-container { background-color: #2d3748; border: 2px solid #ff8136; border-radius: 8px; }
+        .card { padding: 20px; transition: background-color 0.3s ease; }
+        .card .title { font-size: 14px; color: #a0aec0; margin: 0; }
+        .card .value { font-size: 32px; font-weight: bold; color: #ffffff; margin: 8px 0 0 0; }
+        .card.highlight-patricio { background-color: #FF8DC6; border-color: #ffffff; }
+        .card.highlight-patricio .title, .card.highlight-patricio .value { color: #1a202c; }
+        .filter-container { padding: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center; }
+        .filter-container label { font-weight: 600; color: #cbd5e0; display: block; margin-bottom: 8px; }
+        .filter-container select, .filter-container input[type="text"] { width: 100%; padding: 10px; font-size: 16px; background-color: #1a202c; color: #e2e8f0; border: 1px solid #4a5568; border-radius: 6px; }
+        .table-container { max-height: 70vh; overflow: auto; border: 1px solid #4a5568; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { padding: 0.75em; border: 1px solid #4a5568; text-align: left; vertical-align: top; word-wrap: break-word; }
+        thead { position: sticky; top: 0; z-index: 10; }
+        thead th { background-color: #2d3748; color: #ffffff; font-weight: 600; vertical-align: middle; height: 90px; }
+        thead th img { max-width: 64px; max-height: 64px; object-fit: contain; filter: invert(90%) sepia(10%) saturate(150%) hue-rotate(180deg); }
+        tbody tr { background-color: #2d3748; }
+        tbody tr:nth-of-type(even) { background-color: #1a202c; }
+        tbody tr:hover td { background-color: #4a5568; }
+        th:nth-child(1), td:nth-child(1) { position: sticky; left: 0; }
+        th:nth-child(2), td:nth-child(2) { position: sticky; left: 180px; }
+        th:nth-child(3), td:nth-child(3) { position: sticky; left: 360px; }
+        thead th:nth-child(-n+3) { z-index: 15; }
+        tbody td:nth-child(-n+3) { background-color: #2d3748; z-index: 5; }
+        tbody tr:nth-of-type(even) td:nth-child(-n+3) { background-color: #1a202c; }
+        tbody tr:hover td:nth-child(-n+3) { background-color: #4a5568; }
+        thead th:nth-child(-n+3), tbody td:nth-child(-n+3) { width: 180px; min-width: 180px; text-align: left; }
+        thead th:nth-child(n+4), tbody td:nth-child(n+4) { width: 90px; min-width: 90px; text-align: center; vertical-align: middle; }
+        thead th:last-child, tbody td:last-child { width: 90px; min-width: 90px; }
+        .icon { font-size: 24px; text-align: center; width: 100%; }
+        .icon-verde { color: #28a745; font-size: 33px; }
+        .icon-amarillo { color: #ffc107; font-size: 33px; }
+        .icon-azul { color: #0d6efd; }
+        .view-icon { cursor: pointer; color: #a0aec0; font-size: 20px; }
+        .view-icon:hover { color: #ffffff; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); }
+        .modal-content { background-color: #2d3748; color: #e2e8f0; margin: 10% auto; padding: 25px; border: 1px solid #4a5568; border-radius: 8px; width: 80%; max-width: 600px; position: relative; }
+        .modal-close { color: #a0aec0; position: absolute; top: 10px; right: 20px; font-size: 28px; font-weight: bold; cursor: pointer; }
+        #modal-epp-list { list-style-type: none; padding: 0; max-height: 200px; overflow-y: auto; }
+        #modal-epp-list li { background-color: #1a202c; border: 1px solid #4a5568; border-radius: 4px; padding: 8px; margin-bottom: 5px; }
+        .puesto-cell { display: flex; justify-content: space-between; align-items: center; }
+        .header-left { display: flex; align-items: center; }
+        .menu-container { position: relative; display: inline-block; }
+        .menu-button { background-color: #ff8136; color: white; padding: 12px 24px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: transform 0.1s ease; }
+        .menu-button:active { transform: scale(0.95); }
+        .menu-dropdown { display: none; position: absolute; right: 0; background-color: #2d3748; border: 1px solid #4a5568; min-width: 220px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 100; border-radius: 8px; animation: bubble-in 0.3s ease-out; }
+        .menu-dropdown a { color: #e2e8f0; padding: 12px 16px; text-decoration: none; display: block; }
+        .menu-dropdown a:hover { background-color: #FFD700; color: #1a202c; }
+        .menu-container.show .menu-dropdown { display: block; }
+        @keyframes bubble-in { 0% { opacity: 0; transform: scale(0.9) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+        .animacion-container { position: absolute; top: 135px; left: 0; width: 100%; z-index: 1; pointer-events: none; }
+        .gary-caminando { position: absolute; height: 50px; width: auto; animation: caminar 35s linear infinite; }
+        @keyframes caminar { 0% { transform: translateX(-100%); } 100% { transform: translateX(calc(100vw - 50px)); } }
+        .tooltip-container { position: relative; display: inline-flex; justify-content: center; align-items: center; width: 100%; height: 100%; cursor: pointer; }
+        .tooltip-text { visibility: hidden; width: 200px; background-color: #f8fafc; color: #1a202c; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 125%; left: 50%; margin-left: -100px; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #f8fafc transparent transparent transparent; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <div class="animacion-container">
+        <img src="https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Gary3-removebg-preview.png" class="gary-caminando" alt="Gary caminando">
+    </div>
+
+    <div class="header-container">
+        <div class="header-left">
+            <img src="https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/3DLogoPozuelo.png" alt="Logo de la Compañía" class="company-logo">
+            <h1>Dashboard de Matriz EPP</h1>
+        </div>
+        <div class="menu-container">
+            <button class="menu-button">Menú</button>
+            <div class="menu-dropdown">
+                <a href="https://docs.google.com/spreadsheets/d/1e1pzFSe-bXV8s6dxt-d0NHU8WG-bldGueOUOkVRNsK8/edit?usp=sharing" target="_blank">Ir a la Hoja de Cálculo</a>
+                <a href="URL_DE_TU_CATALOGO_EPP" target="_blank">Ver Catálogo de EPP</a>
+                <a href="URL_DE_INFO_DESARROLLO" target="_blank" style="padding: 5px 10px;">
+                    <img src="https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/refs/heads/main/Desrrollo.jpg" alt="Información de Desarrollo" style="max-width: 100%; height: auto; display: block; border-radius: 4px;">
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="summary-cards">
+        <div class="card" id="card-total"><p class="title">Total Puestos</p><p class="value" id="count-total">0</p></div>
+        <div class="card" id="card-administrativo"><p class="title">Administrativo</p><p class="value" id="count-administrativo">0</p></div>
+        <div class="card" id="card-mantenimiento"><p class="title">Mantenimiento</p><p class="value" id="count-mantenimiento">0</p></div>
+        <div class="card" id="card-operativo-planta"><p class="title">Operativo - Planta</p><p class="value" id="count-operativo">0</p></div>
+        <div class="card" id="card-tercerizado"><p class="title">Tercerizado</p><p class="value" id="count-tercerizado">0</p></div>
+    </div>
+
+    <div class="filter-container">
+        <div><label for="area-filter">Filtrar por Área:</label><select id="area-filter"><option value="">-- Todas las Áreas --</option></select></div>
+        <div><label for="keyword-search">Buscar por Palabra Clave:</label><input type="text" id="keyword-search" placeholder="Escribe una palabra clave..."></div>
+    </div>
+    
+    <div class="table-container">
+        <table id="epp-table">
+            <thead id="tabla-header"></thead>
+            <tbody id="tabla-body"></tbody>
+        </table>
+    </div>
+
+    <div id="eppModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 id="modal-puesto"></h2>
+            <p><strong>Área o Departamento:</strong> <span id="modal-area"></span></p>
+            <p><strong>SITIO/ZONA/ÁREA:</strong> <span id="modal-sitio"></span></p>
+            <hr style="border-color: #4a5568;">
+            <h3>EPP Requerido:</h3>
+            <ul id="modal-epp-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSmlxoOZ8tMO7apcM77z_bQj5v8-pW8pksVrwR8pymxM0zl-g8M-nWO52JlrHakRjMSzbPaiPqUm9RM/pub?gid=885796122&single=true&output=csv';
+        let encabezadosGlobales = [];
+
+        const HEADER_ICON_MAP = {
+            'Tapones Auditivos': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Tapones_Auditivos.png',
+            'Orejeras': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Orejeras.png',
+            'Lentes Claros': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Lentes_Claros.png',
+            'Lentes oscuros': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Lentes_oscuros.png',
+            'Monogafas': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Monogafas.png',
+            'Sobrelentes': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Sobrelentes.png',
+            'Gafa oxicorte': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Gafa_oxicorte.png',
+            'Guantes de Latex': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Guantes_de_Latex.png',
+            'Guante Neopreno': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Guante_Neopreno.png',
+            'Guante Abrasion': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Guante_Abrasion.png',
+            'Guantes de nitrilo': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Guantes_de_nitrilo.png',
+            'Guantes Dielectricos 1000v': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Guantes_Dielectricos_1000v.png',
+            'Guante Cuero': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Guante_Cuero.png',
+            'Guante Anti Impacto': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Guante_Anti_Impacto.png',
+            'Zapatos de Seguridad': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Zapatos_de_Seguridad.png',
+            'Botas de Hule': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Botas_de_Hule.png',
+            'Respirador media cara': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Respirador_media_cara.png',
+            'Mascarilla N95': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Mascarilla_N95.png',
+            'Mascara Full Face': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Mascara_Full_Face.png',
+            'Careta de Proteccion': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Careta_de_Protecci%C3%B3n.png',
+            'Mascara de Sooldar': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Mascara_de_Sooldar.png',
+            'Manga Protecion Solar': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Manga_Protecion_Solar.png',
+            'Gorro Tipo Chavo': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Gorro_Tipo_Chavo.png',
+            'Pasamontañas Licra': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Pasamonta%C3%B1as_Licra.png',
+            'Delantal de vinil': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Delantal_de_vinil.png',
+            'Kimono Quimicos': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Kimono_Quimicos.png',
+            'Chaqueta Soldador': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Chaqueta_Soldador.png',
+            'Rodilleras': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Rodilleras.png',
+            'Arnes de Seguridad': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Arnes_de_Seguridad.png',
+            'Casco para Alturas': 'https://raw.githubusercontent.com/Walfarod1/Imagenes-para-matriz-de-EPP/main/Casco_para_Alturas.png'
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuButton = document.querySelector('.menu-button');
+            const menuContainer = document.querySelector('.menu-container');
+            if (menuButton) {
+                menuButton.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    menuContainer.classList.toggle('show');
+                });
+            }
+            window.addEventListener('click', function(event) {
+                if (menuContainer && !menuContainer.contains(event.target)) {
+                    menuContainer.classList.remove('show');
+                }
+            });
+
+            Papa.parse(csvUrl, {
+                download: true, header: false, skipEmptyLines: true,
+                complete: function(results) {
+                    const todasLasFilas = results.data;
+                    encabezadosGlobales = todasLasFilas[6];
+                    const filasDeDatos = todasLasFilas.slice(7).filter(fila => fila.join('').trim() !== '' && fila[0] !== 'Puesto');
+                    
+                    construirTabla(encabezadosGlobales, filasDeDatos);
+                    actualizarTarjetas(filasDeDatos);
+                    poblarFiltroArea(filasDeDatos);
+                    activarFiltros();
+                    activarModal(filasDeDatos);
+                }
+            });
+        });
+
+        function construirTabla(encabezados, datos) {
+            const thead = document.getElementById('tabla-header');
+            let headerRowHTML = '<tr>';
+            encabezados.forEach((titulo, index) => {
+                const tituloLimpio = titulo.trim();
+                if (index < 3) {
+                    headerRowHTML += `<th>${tituloLimpio}</th>`;
+                } else {
+                    const urlIcono = HEADER_ICON_MAP[tituloLimpio];
+                    if (urlIcono && urlIcono.startsWith('http')) {
+                        headerRowHTML += `<th><img src="${urlIcono}" alt="${tituloLimpio}" title="${tituloLimpio}"></th>`;
+                    } else {
+                        headerRowHTML += `<th>${tituloLimpio}</th>`;
+                    }
+                }
+            });
+            headerRowHTML += '<th>Detalles</th>';
+            thead.innerHTML = headerRowHTML;
+
+            const tbody = document.getElementById('tabla-body');
+            tbody.innerHTML = '';
+            datos.forEach((fila, rowIndex) => {
+                let nuevaFila = tbody.insertRow();
+                nuevaFila.setAttribute('data-row-index', rowIndex);
+                
+                encabezados.forEach((enc, i) => {
+                    let nuevaCelda = nuevaFila.insertCell();
+                    if (i === 0) {
+                        nuevaCelda.innerHTML = `<div class="puesto-cell"><span>${(fila[i] || '').trim()}</span><i class="fas fa-eye view-icon" title="Ver Detalles"></i></div>`;
+                    } else {
+                        nuevaCelda.innerHTML = (i >= 3) ? obtenerContenidoCelda(fila[i] || '') : (fila[i] || '');
+                    }
+                });
+            });
+        }
+
+        function obtenerContenidoCelda(texto) {
+            const textoEnMinusculas = texto.toLowerCase();
+            if (textoEnMinusculas === 'si' || textoEnMinusculas === 'sí') {
+                return `<i class="fas fa-check-circle icon icon-verde"></i>`;
+            }
+            if (textoEnMinusculas.includes('cuando aplique')) {
+                const leyenda = "Cuando Aplique";
+                return `<div class="tooltip-container"><i class="fas fa-check-circle icon icon-amarillo"></i><span class="tooltip-text">${leyenda}</span></div>`;
+            }
+            if (textoEnMinusculas.includes('requiere dictamen')) {
+                const leyenda = "Opción a Tapones/Requiere Dictamen Medico";
+                return `<div class="tooltip-container"><i class="fas fa-info-circle icon icon-azul"></i><span class="tooltip-text">${leyenda}</span></div>`;
+            }
+            return '';
+        }
+
+        function activarModal(datos) {
+            const modal = document.getElementById('eppModal');
+            const tbody = document.getElementById('tabla-body');
+            const spanClose = document.querySelector('.modal-close');
+            tbody.addEventListener('click', function(event) {
+                if (!event.target.classList.contains('view-icon')) return;
+                const filaElement = event.target.closest('tr');
+                const rowIndex = parseInt(filaElement.getAttribute('data-row-index'));
+                const filaDatos = datos[rowIndex];
+                document.getElementById('modal-puesto').textContent = filaDatos[0];
+                document.getElementById('modal-area').textContent = filaDatos[1];
+                document.getElementById('modal-sitio').textContent = filaDatos[2];
+                const listaEpp = document.getElementById('modal-epp-list');
+                listaEpp.innerHTML = '';
+                for (let i = 3; i < encabezadosGlobales.length; i++) {
+                    const aplica = (filaDatos[i] || '').toLowerCase();
+                    if (aplica.includes('si') || aplica.includes('aplica') || aplica.includes('requiere dictamen')) {
+                        const nombreEpp = encabezadosGlobales[i].trim();
+                        if(nombreEpp) {
+                            const li = document.createElement('li');
+                            li.textContent = nombreEpp;
+                            listaEpp.appendChild(li);
+                        }
+                    }
+                }
+                modal.style.display = 'block';
+            });
+            spanClose.onclick = () => { modal.style.display = 'none'; };
+            window.onclick = (event) => { if (event.target == modal) modal.style.display = 'none'; };
+        }
+
+        function actualizarTarjetas(datos) {
+             let conteos = { 'Administrativo': 0, 'Mantenimiento': 0, 'Operativo - Planta': 0, 'Tercerizado': 0 };
+             datos.forEach(fila => {
+                const area = (fila[1] || '').trim();
+                if (conteos.hasOwnProperty(area)) conteos[area]++;
+             });
+             document.getElementById('count-total').textContent = datos.length;
+             document.getElementById('count-administrativo').textContent = conteos['Administrativo'];
+             document.getElementById('count-mantenimiento').textContent = conteos['Mantenimiento'];
+             document.getElementById('count-operativo').textContent = conteos['Operativo - Planta'];
+             document.getElementById('count-tercerizado').textContent = conteos['Tercerizado'];
+        }
+
+        function poblarFiltroArea(datos) {
+            const filtroArea = document.getElementById('area-filter');
+            filtroArea.innerHTML = '<option value="">-- Todas las Áreas --</option>';
+            const areas = [...new Set(datos.map(fila => (fila[1] || '').trim()))].sort();
+            areas.forEach(area => {
+                if(area && area.toLowerCase() !== 'area o departamento') {
+                    const opcion = document.createElement('option');
+                    opcion.value = area;
+                    opcion.textContent = area;
+                    filtroArea.appendChild(opcion);
+                }
+            });
+        }
+
+        function activarFiltros() {
+            const filtroArea = document.getElementById('area-filter');
+            const filtroPalabraClave = document.getElementById('keyword-search');
+            const filas = document.querySelectorAll('#tabla-body tr');
+            function filtrarTabla() {
+                const areaSeleccionada = filtroArea.value;
+                const palabraClave = filtroPalabraClave.value.toLowerCase();
+                document.querySelectorAll('.summary-cards .card').forEach(card => card.classList.remove('highlight-patricio'));
+                if (areaSeleccionada) {
+                    const cardId = 'card-' + areaSeleccionada.toLowerCase().replace(/\s+/g, '-').replace(/-+/g, '-');
+                    const cardSeleccionada = document.getElementById(cardId);
+                    if (cardSeleccionada) cardSeleccionada.classList.add('highlight-patricio');
+                }
+                filas.forEach(fila => {
+                    const celdas = fila.getElementsByTagName('td');
+                    const textoArea = (celdas[1] ? celdas[1].textContent : '').trim();
+                    const textoCompletoFila = fila.textContent.toLowerCase();
+                    const coincideArea = areaSeleccionada === '' || textoArea === areaSeleccionada;
+                    const coincidePalabraClave = palabraClave === '' || textoCompletoFila.includes(palabraClave);
+                    fila.style.display = (coincideArea && coincidePalabraClave) ? '' : 'none';
+                });
+            }
+            if(filtroArea) filtroArea.addEventListener('change', filtrarTabla);
+            if(filtroPalabraClave) filtroPalabraClave.addEventListener('input', filtrarTabla);
+        }
+    </script>
+</body>
+</html>
